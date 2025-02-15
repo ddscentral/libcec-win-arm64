@@ -47,11 +47,6 @@ IF "%4" == "" (
   SET DOTNETAPPS=0
 )
 
-rem Building .NET applications is not supported on ARM64
-if "%BUILDARCH%" == "arm64" (
-  SET DOTNETAPPS=0
-)  
-
 SET BUILDPATH=%MYDIR%..\build
 SET EXITCODE=1
 
@@ -79,28 +74,29 @@ IF "%TOOLCHAIN_NAME%" == "" (
   EXIT /b 2
 )
   
-rem Building LibCecSharp isn't supported on ARM64
+
+rem Compile LibCecSharp and LibCecSharpCore
+ECHO. * cleaning LibCecSharp and LibCecSharpCore for %BUILDARCH%
+"%DevEnvDir%devenv.com" libcec.sln /Clean "%BUILDTYPE%|%BUILDARCHPROJECT%"
+ECHO. * compiling LibCecSharp and LibCecSharpCore for %BUILDARCH%
+"%DevEnvDir%devenv.com" libcec.sln /Build "%BUILDTYPE%|%BUILDARCHPROJECT%"
+
+rem Create dir for referenced libs and check compilation results
+RMDIR /s /q "%MYDIR%..\build\ref" >nul 2>&1
+MKDIR "%MYDIR%..\build\ref" >nul
+MKDIR "%MYDIR%..\build\ref\netcore" >nul
+
+rem Check and copy LibCecSharp
+IF EXIST "%MYDIR%..\build\%BUILDARCH%\LibCecSharp.dll" (
+  COPY "%MYDIR%..\build\%BUILDARCH%\LibCecSharp.*" "%MYDIR%..\build\ref" >nul
+) ELSE (
+  ECHO. *** failed to build LibCecSharp for %BUILDARCH% ***
+  PAUSE
+  EXIT /b 1
+)
+
+rem Building LibCecSharpCore isn't supported on ARM64
 if not "%BUILDARCH%" == "arm64" (
-  rem Compile LibCecSharp and LibCecSharpCore
-  ECHO. * cleaning LibCecSharp and LibCecSharpCore for %BUILDARCH%
-  "%DevEnvDir%devenv.com" libcec.sln /Clean "%BUILDTYPE%|%BUILDARCHPROJECT%"
-  ECHO. * compiling LibCecSharp and LibCecSharpCore for %BUILDARCH%
-  "%DevEnvDir%devenv.com" libcec.sln /Build "%BUILDTYPE%|%BUILDARCHPROJECT%"
-
-  rem Create dir for referenced libs and check compilation results
-  RMDIR /s /q "%MYDIR%..\build\ref" >nul 2>&1
-  MKDIR "%MYDIR%..\build\ref" >nul
-  MKDIR "%MYDIR%..\build\ref\netcore" >nul
-
-  rem Check and copy LibCecSharp
-  IF EXIST "%MYDIR%..\build\%BUILDARCH%\LibCecSharp.dll" (
-    COPY "%MYDIR%..\build\%BUILDARCH%\LibCecSharp.*" "%MYDIR%..\build\ref" >nul
-  ) ELSE (
-    ECHO. *** failed to build LibCecSharp for %BUILDARCH% ***
-    PAUSE
-    EXIT /b 1
-  )
-
   rem Check and copy LibCecSharpCore
   IF EXIST "%MYDIR%..\build\%BUILDARCH%\netcore\LibCecSharpCore.dll" (
     COPY "%MYDIR%..\build\%BUILDARCH%\netcore\LibCecSharpCore.*" "%MYDIR%..\build\ref\netcore\." >nul
@@ -137,14 +133,17 @@ IF %DOTNETAPPS% == 1 (
     EXIT /b 1
   )
 
-  rem Check and copy CecSharpCoreTester
-  IF EXIST "..\build\%BUILDARCHPROJECT%\netcoreapp3.1\CecSharpCoreTester.exe" (
-    COPY "..\build\%BUILDARCHPROJECT%\netcoreapp3.1\CecSharpCoreTester.*" "%MYDIR%..\build\%BUILDARCH%\netcore\." >nul
-  ) ELSE (
-    ECHO. *** failed to build CecSharpCoreTester for %BUILDARCH% ***
-    PAUSE
-    EXIT /b 1
-  )
+  rem Do not check for CecSharpCoreTester on arm64
+  if not "%BUILDARCH%" == "arm64" (
+    rem Check and copy CecSharpCoreTester
+    IF EXIST "..\build\%BUILDARCHPROJECT%\netcoreapp3.1\CecSharpCoreTester.exe" (
+      COPY "..\build\%BUILDARCHPROJECT%\netcoreapp3.1\CecSharpCoreTester.*" "%MYDIR%..\build\%BUILDARCH%\netcore\." >nul
+    ) ELSE (
+      ECHO. *** failed to build CecSharpCoreTester for %BUILDARCH% ***
+      PAUSE
+      EXIT /b 1
+    )
+  )  
 )
 
 RMDIR /s /q "%BUILDPATH%\cmake" >nul 2>&1
